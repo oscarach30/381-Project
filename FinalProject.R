@@ -61,11 +61,29 @@ model_nonlinear_PAY0 <- lm(default.payment.next.month ~ PAY_0 + I(PAY_0^2) + BIL
 # Summary of the model
 summary(model_nonlinear_PAY0)
 
-# Regularizing the model using Lasso
-x_matrix_PAY0 <- model.matrix(default.payment.next.month ~ PAY_0 + I(PAY_0^2) + BILL_AMT1, data = train_set)[, -1]
-cv_model_PAY0 <- cv.glmnet(x_matrix_PAY0, y_vector, alpha = 1) # alpha = 1 for Lasso
-best_lambda_PAY0 <- cv_model_PAY0$lambda.min
-model_regularized_PAY0 <- glmnet(x_matrix_PAY0, y_vector, alpha = 1, lambda = best_lambda_PAY0)
+# Install and load the mgcv package
+install.packages("mgcv")
+library(mgcv)
 
-# Summary of the regularized model
-print(coef(model_regularized_PAY0))
+# Poisson Regression GAM
+model_poisson_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+                         family = poisson, data = train_set)
+
+# Summary of the model
+summary(model_poisson_gam)
+
+# Quasi-Poisson Regression GAM
+model_quasi_poisson_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+                               family = quasipoisson, data = train_set)
+
+# Summary of the model
+summary(model_quasi_poisson_gam)
+
+# GAM with Splines
+model_spline_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+                        data = train_set)
+
+# Summary of the model
+summary(model_spline_gam)
+
+
