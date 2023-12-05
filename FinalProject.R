@@ -1,18 +1,46 @@
+install.packages('readr')
 install.packages("caret")
 install.packages("Matrix")
+install.packages('dplyr')
+install.packages('tidyverse')
+library(tidyverse)
+library(dplyr)
 library(caret)
+library(readr)
 library(Martix)
-# Set seed for reproducibility
-set.seed(123)
+library(readr)
+
+# Read the CSV file
+df<-`default.of.credit.card.clients.(1)`
+View(df)
+
 # Set the correct column names
 colnames(df) <- as.character(unlist(df[2, ]))
 
 # Remove the first two rows
 df <- df[-c(1, 2), ]
+rownames(df) <- NULL
 
-#convert the data to correct types
-df <- data.frame(lapply(df, function(x) as.numeric(as.character(x))))
+# Function to remove '$' and convert to numeric
+clean_column <- function(column) {
+  column <- gsub("\\$", "", column) # Remove '$'
+  column <- gsub(",", "", column)   # Remove commas
+  as.numeric(column)               # Convert to numeric
+}
+#remove all $ from the dataset
+df <- df %>% 
+  mutate(across(where(~any(str_detect(., fixed("$")))), clean_column))
+#replace all NA values with 0s
+df <- df %>%
+  mutate(across(everything(), ~as.numeric(replace_na(., 0))))
+#view cleaned data frame
 View(df)
+
+# View the cleaned dataframe
+head(df)
+
+# Set seed for reproducibility
+set.seed(123)
 
 # Step 1: Create a random index for partitioning
 index <- sample(1:nrow(df), nrow(df))
@@ -38,15 +66,25 @@ write.csv(train_set, "train_set.csv", row.names = FALSE)
 write.csv(valid_set, "valid_set.csv", row.names = FALSE)
 write.csv(test_set, "test_set.csv", row.names = FALSE)
 
+df_numeric <- df
+
+df <- data.frame(lapply(df, function(x) as.numeric(as.character(x))))
+View(df)
+
+# Check for conversion issues
+summary(df_numeric)
+
 # Assuming df is your data frame
-corMatrix <- cor(df, use = "complete.obs")
+corMatrix <- cor(df)
 
 # View the correlation matrix
 print(corMatrix)
 
 # Simple Linear Model
-# CC Balance as a function of income
-model_linear <- lm(Balance ~ Income, data = train_set)
+# CC Balance as a function of Age
+model_linear <- lm(df$` LIMIT_BAL ` ~ df$AGE, data = train_set)
+
+model_linear
 
 
 # Linear regression model predicting default.payment.next.month
@@ -85,5 +123,3 @@ model_spline_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX
 
 # Summary of the model
 summary(model_spline_gam)
-
-
