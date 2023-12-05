@@ -8,7 +8,7 @@ library(dplyr)
 library(caret)
 library(readr)
 library(Martix)
-library(readr)
+#CLEANING THE DATA
 
 # Read the CSV file
 df<-`default.of.credit.card.clients.(1)`
@@ -21,6 +21,9 @@ colnames(df) <- as.character(unlist(df[2, ]))
 df <- df[-c(1, 2), ]
 rownames(df) <- NULL
 
+# renaming Default column
+df <- df %>% rename(DEFAULT = `default payment next month`)
+
 # Function to remove '$' and convert to numeric
 clean_column <- function(column) {
   column <- gsub("\\$", "", column) # Remove '$'
@@ -30,14 +33,19 @@ clean_column <- function(column) {
 #remove all $ from the dataset
 df <- df %>% 
   mutate(across(where(~any(str_detect(., fixed("$")))), clean_column))
+
 #replace all NA values with 0s
 df <- df %>%
   mutate(across(everything(), ~as.numeric(replace_na(., 0))))
+
 #view cleaned data frame
 View(df)
 
 # View the cleaned dataframe
 head(df)
+
+
+
 
 # Set seed for reproducibility
 set.seed(123)
@@ -77,18 +85,35 @@ summary(df_numeric)
 # Assuming df is your data frame
 corMatrix <- cor(df)
 
-# View the correlation matrix
-print(corMatrix)
+# Assuming corMatrix is your correlation matrix
+diag(corMatrix) <- NA  # Set diagonal values to NA
+
+# Function to find maximum correlation and the corresponding variable
+find_max_corr <- function(column, matrix) {
+  max_value <- max(column, na.rm = TRUE)  # Find maximum value
+  max_var <- names(which(column == max_value))  # Find variable name with max correlation
+  return(c(max_var, max_value))
+}
+
+# Apply this function to each column
+max_correlations <- apply(corMatrix, MARGIN = 2, find_max_corr)
+
+# Display the results
+max_correlations
+
+
+
+# Display the maximum value
+max_value
 
 # Simple Linear Model
 # CC Balance as a function of Age
-model_linear <- lm(df$` LIMIT_BAL ` ~ df$AGE, data = train_set)
+model_linear <- lm(df$DEFAULT ~ df$PAY_0, data = train_set)
 
-model_linear
-
+summary(model_linear)
 
 # Linear regression model predicting default.payment.next.month
-model_linear <- lm(default.payment.next.month ~ LIMIT_BAL + SEX + EDUCATION + MARRIAGE + AGE + PAY_0 + PAY_2 + PAY_3 + PAY_4 + PAY_5 + PAY_6 + BILL_AMT1 + BILL_AMT2 + BILL_AMT3 + BILL_AMT4 + BILL_AMT5 + BILL_AMT6 + PAY_AMT1 + PAY_AMT2 + PAY_AMT3 + PAY_AMT4 + PAY_AMT5 + PAY_AMT6, data = train_set)
+model_linear <- lm(DEFAULT ~ LIMIT_BAL + SEX + EDUCATION + MARRIAGE + AGE + PAY_0 + PAY_2 + PAY_3 + PAY_4 + PAY_5 + PAY_6 + BILL_AMT1 + BILL_AMT2 + BILL_AMT3 + BILL_AMT4 + BILL_AMT5 + BILL_AMT6 + PAY_AMT1 + PAY_AMT2 + PAY_AMT3 + PAY_AMT4 + PAY_AMT5 + PAY_AMT6, data = train_set)
 
 # Summary of the model
 summary(model_linear)
