@@ -8,7 +8,12 @@ library(dplyr)
 library(caret)
 library(readr)
 library(Martix)
-#CLEANING THE DATA
+library(lmridge) #FOR lmridge()
+library(broom) #FOR glance() AND tidy()
+library(MASS) #FOR lm.ridge()
+library(ggplot2) #FOR ggplot()
+
+###CLEANING THE DATA###
 
 # Read the CSV file
 df<-`default.of.credit.card.clients.(1)`
@@ -21,8 +26,11 @@ colnames(df) <- as.character(unlist(df[2, ]))
 df <- df[-c(1, 2), ]
 rownames(df) <- NULL
 
+# Remove spaces in column names
+names(df) <- gsub(" ", "", names(df))
+
 # renaming Default column
-df <- df %>% rename(DEFAULT = `default payment next month`)
+df <- df %>% rename(DEFAULT = `defaultpaymentnextmonth`)
 
 # Function to remove '$' and convert to numeric
 clean_column <- function(column) {
@@ -30,7 +38,7 @@ clean_column <- function(column) {
   column <- gsub(",", "", column)   # Remove commas
   as.numeric(column)               # Convert to numeric
 }
-#remove all $ from the dataset
+#remove all '$' signs from the dataset
 df <- df %>% 
   mutate(across(where(~any(str_detect(., fixed("$")))), clean_column))
 
@@ -40,12 +48,10 @@ df <- df %>%
 
 #view cleaned data frame
 View(df)
-
-# View the cleaned dataframe
 head(df)
 
 
-
+######DATA PARTITIONING######
 
 # Set seed for reproducibility
 set.seed(123)
@@ -74,18 +80,31 @@ write.csv(train_set, "train_set.csv", row.names = FALSE)
 write.csv(valid_set, "valid_set.csv", row.names = FALSE)
 write.csv(test_set, "test_set.csv", row.names = FALSE)
 
-df_numeric <- df
-
 df <- data.frame(lapply(df, function(x) as.numeric(as.character(x))))
 View(df)
 
-# Check for conversion issues
-summary(df_numeric)
+#Adding new column to calculate total 6 month revolving balance
+# Calculate ST_BAL
+df$ST_BAL <- (df$BILL_AMT1 - df$PAY_AMT1) +
+  (df$BILL_AMT2 - df$PAY_AMT2) +
+  (df$BILL_AMT3 - df$PAY_AMT3) +
+  (df$BILL_AMT4 - df$PAY_AMT4) +
+  (df$BILL_AMT5 - df$PAY_AMT5) +
+  (df$BILL_AMT6 - df$PAY_AMT6)
 
-# Assuming df is your data frame
+# If balance is >0, 1, else, 0
+# Create PAY_FULL based on ST_BAL
+df$PAY_FULL <- ifelse(df$ST_BAL > 0, 1, 0)
+
+# Display the first few rows of the dataframe to check the new columns
+head(df)
+
+######CORRELATION MATRIX######
+
+# Creating the corMatrix
 corMatrix <- cor(df)
 
-# Assuming corMatrix is your correlation matrix
+#Setting 1.0 values to NA in order to visualize actual correlations
 diag(corMatrix) <- NA  # Set diagonal values to NA
 
 # Function to find maximum correlation and the corresponding variable
@@ -101,25 +120,37 @@ max_correlations <- apply(corMatrix, MARGIN = 2, find_max_corr)
 # Display the results
 max_correlations
 
+######SIMPLE LINEAR MODEL######
 
-
-# Display the maximum value
-max_value
-
-# Simple Linear Model
-# CC Balance as a function of Age
-model_linear <- lm(df$DEFAULT ~ df$PAY_0, data = train_set)
-
-summary(model_linear)
-
-# Linear regression model predicting default.payment.next.month
-model_linear <- lm(DEFAULT ~ LIMIT_BAL + SEX + EDUCATION + MARRIAGE + AGE + PAY_0 + PAY_2 + PAY_3 + PAY_4 + PAY_5 + PAY_6 + BILL_AMT1 + BILL_AMT2 + BILL_AMT3 + BILL_AMT4 + BILL_AMT5 + BILL_AMT6 + PAY_AMT1 + PAY_AMT2 + PAY_AMT3 + PAY_AMT4 + PAY_AMT5 + PAY_AMT6, data = train_set)
+# Paying full statement balance as a function of their first payment
+model_linear <- lm(df$PAY_FULL ~ df$PAY_2, data = train_set)
 
 # Summary of the model
 summary(model_linear)
 
-# Bivariate model with a quadratic transformation on PAY_0
-model_nonlinear_PAY0 <- lm(default.payment.next.month ~ PAY_0 + I(PAY_0^2) + BILL_AMT1, data = train_set)
+######TESTING LM######
+
+ML_Predict_IN <- predict(model_linear, train_set)
+View(ML_Predict)
+View(model_linear$fitted.values)
+LM_Predict_OUT <- predict(model_linear, test_set)
+
+#COMPUTING / REPORTING IN-SAMPLE AND OUT-OF-SAMPLE ROOT MEAN SQUARED ERROR
+(RMSE_1_IN<-sqrt(sum((ML_Predict_IN-train_set$PAY_FULL)^2)/length(ML_Predict_IN))) #computes in-sample error
+(RMSE_1_OUT<-sqrt(sum((LM_Predict_OUT-train_set$PAY_FULL)^2)/length(LM_Predict_OUT))) #computes out-of-sample 
+
+#PLOTTING THE MODEL IN 2D AGAINST BOTH DATA PARTITIONS
+x_grid <- seq(0,70,.1) #CREATES GRID OF X-AXIS VALUES
+
+predictions <- predict(model_linear, list(ad_time=x_grid))
+plot(train_set$PAY_FULL ~ train_set$PAY_2, col='blue')
+lines(x_grid, predictions, col='green', lwd=3)
+points(train_set$PAY_FULL ~ train_set$PAY_2, col='red', pch=3, cex=.5)
+
+#####BIVARIATE MODEL#######
+
+# Bivariate model with a quadratic transformation
+model_nonlinear_PAY_FULL <- lm(PAY_FULL ~ (PAY_2^2), data = train_set)
 
 # Summary of the model
 summary(model_nonlinear_PAY0)
@@ -129,21 +160,20 @@ install.packages("mgcv")
 library(mgcv)
 
 # Poisson Regression GAM
-model_poisson_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+model_poisson_gam <- gam(DEFAULT ~ s(PAY_0^2), 
                          family = poisson, data = train_set)
-
 # Summary of the model
 summary(model_poisson_gam)
 
 # Quasi-Poisson Regression GAM
-model_quasi_poisson_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+model_quasi_poisson_gam <- gam(DEFAULT ~ s(PAY_0), 
                                family = quasipoisson, data = train_set)
 
 # Summary of the model
 summary(model_quasi_poisson_gam)
 
 # GAM with Splines
-model_spline_gam <- gam(default.payment.next.month ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE, 
+model_spline_gam <- gam(DEFAULT ~ s(LIMIT_BAL) + s(AGE) + SEX + EDUCATION + MARRIAGE + PAY_AMT1, 
                         data = train_set)
 
 # Summary of the model
