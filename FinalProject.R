@@ -20,9 +20,6 @@ colnames(df)<- as.character(unlist(df[1,]))
 #Removing duplicate column name in first row
 df <- df[-c(1),]
 
-#Transforming data frame to numeric
-# Assuming your data frame is named df
-
 # Transform all columns to numeric
 df[] <- lapply(df, function(x) as.numeric(as.character(x)))
 
@@ -31,7 +28,6 @@ df <-df %>% rename(DEFAULT = 'default payment next month')
 
 #Removing empty space before column names
 names(df)<- gsub(" ", "", names(df))
-
 
 #view cleaned data frame
 View(df)
@@ -597,9 +593,7 @@ TABLE_VAL_7
 
 TABLE_VAL_7 #REPORT OUT-OF-SAMPLE ERRORS FOR BOTH HYPOTHESIS
 
-
-
-
+               
 ##### Classification tasks 
 
 names(df)
@@ -645,7 +639,7 @@ out_sample_class <- ifelse(out_sample_preds > 0.5, 1, 0)
 out_sample_accuracy <- mean(out_sample_class == test$`DEFAULT`)
 
 
-
+print(in_sample_accuracy)
 print(out_sample_accuracy)
 
 
@@ -673,14 +667,14 @@ mean(train$'DEFAULT'==1)
 mean(validation$'DEFAULT'==1)
 
 kern_type<-"radial" #SPECIFY KERNEL TYPE
-
+library(e1071)
 #BUILD SVM CLASSIFIER
 SVM_Model<- svm(AGE ~ ., 
                 data = train, 
                 type = "C-classification", #set to "eps-regression" for numeric prediction
                 kernel = kern_type,
                 cost=1,                   #REGULARIZATION PARAMETER
-                gamma = 1/(ncol(training)-1), #DEFAULT KERNEL PARAMETER
+                gamma = 1/(ncol(train)-1), #DEFAULT KERNEL PARAMETER
                 coef0 = 0,                    #DEFAULT KERNEL PARAMETER
                 degree=2,                     #POLYNOMIAL KERNEL PARAMETER
                 scale = FALSE)                #RESCALE DATA? (SET TO TRUE TO NORMALIZE)
@@ -740,6 +734,7 @@ rownames(TUNE_TABLE) <- c('E_IN', 'E_OUT')
 TUNE_TABLE #REPORT OUT-OF-SAMPLE ERRORS FOR BOTH HYPOTHESIS
 
 
+
 # Loading up libraries
 library(rpart)
 library(rpart.plot)
@@ -780,9 +775,6 @@ out_sample_rf_accuracy <- mean(out_sample_rf_preds == test$`DEFAULT`)
 print(in_sample_rf_accuracy)
 print(out_sample_rf_accuracy)
 
-
-
-
 ####Multi-class Prediction###
 
 #training train as the dataframe
@@ -800,15 +792,19 @@ svm_model <- svm(AGE ~ ., data = train, type = 'C-classification', kernel = 'rad
 
 train <- as.data.frame(train)
 
+summary(svm_model)
+
 library(e1071)
 
 # Discretizing a numeric variable (e.g., AGE) into categories
-df$AGE_cat <- cut(df$AGE, breaks=3, labels=c("Young", "Middle-aged", "Senior"))
+train$AGE_cat <- cut(train$AGE, breaks=3, labels=c("Young", "Middle-aged", "Senior"))
 
-# Split data into training and testing (Assuming train and test datasets are already created)
+# Check for NA values and lengths of each column
+print(sum(is.na(df)))
+print(sapply(df, length))
 
 # Fit SVM Model
-svm_model <- svm(df$AGE_cat ~ ., data = train, type = 'C-classification', kernel = 'radial')
+svm_model <- svm(df$AGE_cat ~ ., data = df, type = 'C-classification', kernel = 'radial')
 
 # Predict and Evaluate Performance
 train_pred <- predict(svm_model, train)
@@ -867,7 +863,6 @@ train_accuracy_svm <- calculate_accuracy(train_pred, train$AGE)
 test_accuracy_svm <- calculate_accuracy(test_pred, test$AGE)
 
 # Calculate Accuracies for Decision Tree Model
-# Assuming you have predictions from decision tree as train_pred_tree and test_pred_tree
 train_accuracy_tree <- calculate_accuracy(train_pred, train$AGE)
 test_accuracy_tree <- calculate_accuracy(test_pred, test$AGE)
 
